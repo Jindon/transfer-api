@@ -4,21 +4,31 @@
     "minimum-stability": "stable",
     "prefer-stable": true,
     "require": {
-        "php": ">=8.4",
+        "php": "^8.5",
         "ext-ctype": "*",
         "ext-iconv": "*",
+        "doctrine/doctrine-bundle": "^3.2",
+        "doctrine/doctrine-migrations-bundle": "^4.0",
+        "doctrine/orm": "^3.6",
+        "phpdocumentor/reflection-docblock": "^6.0",
+        "phpstan/phpdoc-parser": "^2.3",
         "symfony/console": "8.1.*",
         "symfony/dotenv": "8.1.*",
         "symfony/flex": "^2",
         "symfony/framework-bundle": "8.1.*",
+        "symfony/monolog-bundle": "^4.0",
+        "symfony/property-access": "8.1.*",
+        "symfony/property-info": "8.1.*",
         "symfony/runtime": "8.1.*",
+        "symfony/security-bundle": "8.1.*",
+        "symfony/serializer": "8.1.*",
+        "symfony/validator": "8.1.*",
         "symfony/yaml": "8.1.*"
-    },
-    "require-dev": {
     },
     "config": {
         "allow-plugins": {
             "php-http/discovery": true,
+            "phpstan/extension-installer": true,
             "symfony/flex": true,
             "symfony/runtime": true
         },
@@ -57,7 +67,9 @@
         ],
         "post-update-cmd": [
             "@auto-scripts"
-        ]
+        ],
+        "cs-check": "php-cs-fixer fix --dry-run --diff",
+        "cs-fix": "php-cs-fixer fix"
     },
     "conflict": {
         "symfony/symfony": "*"
@@ -65,7 +77,17 @@
     "extra": {
         "symfony": {
             "allow-contrib": false,
-            "require": "8.1.*"
+            "require": "8.1.*",
+            "docker": true
         }
+    },
+    "require-dev": {
+        "php-cs-fixer/shim": "^3.95",
+        "phpstan/extension-installer": "^1.4",
+        "phpstan/phpstan": "^2.2",
+        "phpstan/phpstan-symfony": "^2.0",
+        "symfony/maker-bundle": "^1.67",
+        "symfony/stopwatch": "8.1.*",
+        "symfony/web-profiler-bundle": "8.1.*"
     }
 }
