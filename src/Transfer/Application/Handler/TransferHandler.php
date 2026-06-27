@@ -7,6 +7,7 @@ namespace App\Transfer\Application\Handler;
 use App\Account\Domain\Account;
 use App\Account\Domain\Exception\AccountNotFoundException;
 use App\Account\Domain\Repository\AccountRepositoryInterface;
+use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
@@ -16,16 +17,22 @@ use App\Transfer\Domain\Transfer;
 use App\Transfer\Infrastructure\Persistence\TransactionRunner;
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use Psr\Cache\CacheItemPoolInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Component\Uid\Ulid;
 use Throwable;
 
 readonly class TransferHandler
 {
+    private const int REPLAY_TTL = 86400; // 24h
+
     public function __construct(
         private AccountRepositoryInterface $accountRepository,
         private TransactionRunner $transferProcessor,
         private TransferRepositoryInterface $transferRepository,
         private IdempotencyRequestRepositoryInterface $idempotencyRequestRepository,
+        private CacheItemPoolInterface $replayCache,
+        private LoggerInterface $logger,
     ) {
     }
 
@@ -34,10 +41,22 @@ readonly class TransferHandler
      */
     public function handle(TransferCommand $command): Transfer
     {
+        $cached = $this->fromReplayCache($command);
+        if ($cached) {
+            return $cached;
+        }
+
         try {
             $this->idempotencyRequestRepository->reserve($command->idempotencyKey, $command->requestHash);
         } catch (UniqueConstraintViolationException) {
-            return $this->resolveFromExistingKey($command);
+            /**
+             * if unique constraint, means entry for key exists
+             * get that out of DB and push it to replay cache before returning the transfer.
+             */
+            $transfer = $this->resolveFromExistingKey($command);
+            $this->toReplayCache($command->idempotencyKey, $command->requestHash, $transfer);
+
+            return $transfer;
         }
 
         $pendingTransfer = $this->createPendingTransfer($command);
@@ -47,7 +66,7 @@ readonly class TransferHandler
         $this->idempotencyRequestRepository->attach($command->idempotencyKey, Transfer::class, $transferId);
 
         try {
-            return $this->transferProcessor->run(function () use ($transferId) {
+            $transfer = $this->transferProcessor->run(function () use ($transferId) {
                 $transfer = $this->transferRepository->findById($transferId);
 
                 if (!$transfer->isPending()) {
@@ -64,19 +83,33 @@ readonly class TransferHandler
                 /** @var Account $destinationAccount */
                 $destinationAccount = $accounts[$destinationAccountId];
 
-                $transfer->complete(new DateTimeImmutable());
-
                 $sourceAccount->debit($transfer->getAmount());
                 $destinationAccount->credit($transfer->getAmount());
+
+                /*
+                 * If fees are involved, we can handle it here as well
+                 * debit fees from source -> credit to fee account
+                 */
+
+                $transfer->complete(new DateTimeImmutable());
 
                 $this->accountRepository->save($sourceAccount);
                 $this->accountRepository->save($destinationAccount);
 
                 return $transfer;
             });
+
+            $this->toReplayCache($command->idempotencyKey, $command->requestHash, $transfer);
+
+            return $transfer;
         } catch (Throwable $e) {
             $this->transferRepository->markFailed($transferId, $e->getMessage());
             $this->idempotencyRequestRepository->release($command->idempotencyKey);
+
+            $this->logger->warning('transfer.failed', [
+                'transfer_id' => $transferId,
+                'reason' => $e->getMessage(),
+            ]);
 
             throw $e;
         }
@@ -102,6 +135,8 @@ readonly class TransferHandler
             throw new TransferConflictException('Request already in progress');
         }
 
+        $this->logger->info('transfer.db_replay', ['key' => $command->idempotencyKey]);
+
         return $this->transferRepository->findById($existing->getSourceId());
     }
 
@@ -119,5 +154,54 @@ readonly class TransferHandler
             reference: (string) new Ulid(),
             dateTime: new DateTimeImmutable(),
         );
+    }
+
+    private function fromReplayCache(TransferCommand $command): ?Transfer
+    {
+        try {
+            $item = $this->replayCache->getItem($this->cacheKey($command->idempotencyKey));
+
+            if (!$item->isHit()) {
+                return null;
+            }
+
+            ['source_id' => $sourceId, 'request_hash' => $storedHash] = $item->get();
+
+            if (!hash_equals($command->requestHash, $storedHash)) {
+                throw new RequestHashMismatchException();
+            }
+
+            $transfer = $this->transferRepository->findById($sourceId);
+
+            if (!$transfer) {
+                return null; // falls through DB
+            }
+
+            $this->logger->info('transfer.cache_replay', ['key' => $command->idempotencyKey]);
+
+            return $transfer;
+        } catch (RequestHashMismatchException $e) {
+            throw $e;
+        } catch (Throwable) {
+            // Service down - falls through DB
+            return null;
+        }
+    }
+
+    private function toReplayCache(string $key, string $requestHash, Transfer $transfer): void
+    {
+        try {
+            $item = $this->replayCache->getItem($this->cacheKey($key));
+            $item->set(['source_id' => $transfer->getId(), 'request_hash' => $requestHash]);
+            $item->expiresAfter(self::REPLAY_TTL);
+            $this->replayCache->save($item);
+        } catch (Throwable) {
+            // Don't throw, Redis failure shouldn't impact the transfer flow
+        }
+    }
+
+    private function cacheKey(string $idempotencyKey): string
+    {
+        return 'idem_transfer_'.hash('sha256', $idempotencyKey);
     }
 }

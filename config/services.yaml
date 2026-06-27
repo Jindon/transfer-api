@@ -26,3 +26,8 @@ services:
     App\Account\Domain\Repository\AccountRepositoryInterface: '@App\Account\Infrastructure\Persistence\Doctrine\DoctrineAccountRepository'
     App\Transfer\Domain\Repository\TransferRepositoryInterface: '@App\Transfer\Infrastructure\Persistence\Doctrine\DoctrineTransferRepository'
     App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface: '@App\Idempotency\Infrastructure\Persistence\Doctrine\DoctrineIdempotencyRequestRepository'
+
+    # Cache pool wiring
+    App\Transfer\Application\Handler\TransferHandler:
+        arguments:
+            $replayCache: '@app.cache.api'
