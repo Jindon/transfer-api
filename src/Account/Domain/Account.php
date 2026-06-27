@@ -35,7 +35,7 @@ class Account
     #[ORM\Column(nullable: true)]
     private ?DateTimeImmutable $updated_at = null;
 
-    public function __construct(string $currencyCode, int $balance)
+    public function __construct(string $currencyCode, int $balance = 0)
     {
         $this->uuid = Uuid::v7();
         $this->currency = $currencyCode;

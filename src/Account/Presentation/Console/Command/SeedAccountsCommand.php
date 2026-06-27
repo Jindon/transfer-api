@@ -3,6 +3,7 @@
 namespace App\Account\Presentation\Console\Command;
 
 use App\Account\Domain\Account;
+use App\Shared\Money\Currency;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -19,10 +20,10 @@ use Throwable;
 class SeedAccountsCommand extends Command
 {
     private const array ACCOUNTS = [
-        ['name' => 'Alice',   'balance' => 10_000_00],
-        ['name' => 'Bob',     'balance' => 5_000_00],
-        ['name' => 'Charlie', 'balance' => 2_500_00],
-        ['name' => 'Diana',   'balance' => 20_000_00],
+        ['currency' => Currency::EUR, 'balance' => 10_000_00],
+        ['currency' => Currency::EUR, 'balance' => 5_000_00],
+        ['currency' => Currency::EUR, 'balance' => 2_500_00],
+        ['currency' => Currency::EUR, 'balance' => 20_000_00],
     ];
 
     public function __construct(
@@ -38,10 +39,8 @@ class SeedAccountsCommand extends Command
 
         $this->entityManager->beginTransaction();
         try {
-            foreach (self::ACCOUNTS as ['name' => $name, 'balance' => $balance]) {
-                $account = new Account();
-                $account->setBalance($balance);
-                $account->setCurrency('EUR');
+            foreach (self::ACCOUNTS as ['currency' => $currency, 'balance' => $balance]) {
+                $account = new Account($currency, $balance);
                 $account->setCreatedAt($now);
                 $account->setUpdatedAt($now);
                 $this->entityManager->persist($account);
