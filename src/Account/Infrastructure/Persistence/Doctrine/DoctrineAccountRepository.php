@@ -3,6 +3,7 @@
 namespace App\Account\Infrastructure\Persistence\Doctrine;
 
 use App\Account\Domain\Account;
+use App\Account\Domain\Exception\AccountNotFoundException;
 use App\Account\Domain\Repository\AccountRepositoryInterface;
 use Doctrine\DBAL\LockMode;
 use Doctrine\ORM\EntityManagerInterface;
@@ -27,12 +28,17 @@ readonly class DoctrineAccountRepository implements AccountRepositoryInterface
      */
     public function getOrderedLockForUpdate(array $ids): array
     {
-        sort($ids);
+        sort($ids, SORT_NUMERIC);
 
         $accounts = [];
 
         foreach ($ids as $id) {
             $account = $this->entityManager->find(Account::class, $id, LockMode::PESSIMISTIC_WRITE);
+
+            if (!$account) {
+                throw new AccountNotFoundException();
+            }
+
             $accounts[$id] = $account;
         }
 

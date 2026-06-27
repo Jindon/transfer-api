@@ -19,18 +19,25 @@ final readonly class TransactionRunner
      */
     public function run(callable $work): mixed
     {
-        $this->entityManager->beginTransaction();
+        $connection = $this->entityManager->getConnection();
+
+        $connection->beginTransaction();
 
         try {
             $result = $work();
+
             $this->entityManager->flush();
-            $this->entityManager->commit();
+            $connection->commit();
 
             return $result;
-        } catch (Throwable $exception) {
-            $this->entityManager->rollback();
+        } catch (Throwable $e) {
+            if ($connection->isTransactionActive()) {
+                $connection->rollBack();
+            }
+
             $this->entityManager->clear();
-            throw $exception;
+
+            throw $e;
         }
     }
 }

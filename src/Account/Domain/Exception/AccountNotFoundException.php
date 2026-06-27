@@ -8,8 +8,12 @@ use RuntimeException;
 
 class AccountNotFoundException extends RuntimeException
 {
-    public function __construct(string $accountUuid)
+    public function __construct(?string $accountUuid = null)
     {
-        parent::__construct(sprintf('Account with UUID "%s" not found.', $accountUuid));
+        $message = $accountUuid
+            ? sprintf('Account with UUID "%s" not found.', $accountUuid)
+            : 'Account with not found';
+
+        parent::__construct($message);
     }
 }
