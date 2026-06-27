@@ -6,6 +6,7 @@ namespace App\Infrastructure\EventListener;
 
 use App\Account\Domain\Exception\AccountNotFoundException;
 use App\Account\Domain\Exception\InsufficientFundException;
+use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
@@ -23,6 +24,7 @@ class ExceptionListener
             $e instanceof InsufficientFundException => [422, 'insufficient-funds', $e->getMessage()],
             $e instanceof AccountNotFoundException => [404, 'not-found', $e->getMessage()],
             $e instanceof TransferAlreadyProcessedException => [409, 'already-processed', $e->getMessage()],
+            $e instanceof RequestHashMismatchException => [409, 'request-hash-mismatch', $e->getMessage()],
             default => [null, null, null],
         };
 

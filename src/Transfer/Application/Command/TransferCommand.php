@@ -12,6 +12,8 @@ final readonly class TransferCommand
         public string $sourceAccountUuid,
         public string $destinationAccountUuid,
         public Money $amount,
+        public string $idempotencyKey,
+        public string $requestHash,
     ) {
     }
 }

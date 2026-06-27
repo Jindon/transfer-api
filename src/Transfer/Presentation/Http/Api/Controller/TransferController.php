@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Transfer\Presentation\Http\Api\Controller;
 
+use App\Idempotency\Domain\Exception\MissingIdempotencyKeyException;
 use App\Shared\Money\Money;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Application\Handler\TransferHandler;
@@ -27,13 +28,15 @@ final class TransferController extends AbstractController
         Request $request,
         #[MapRequestPayload] TransferRequest $transferRequest,
     ): JsonResponse {
-        // Todo: handle idempotency with header
-        $request->headers->get('Idempotency-Key');
+        $idempotencyKey = $request->headers->get('Idempotency-Key')
+            ?? throw new MissingIdempotencyKeyException();
 
         $transferCommand = new TransferCommand(
             sourceAccountUuid: $transferRequest->sourceAccountUuid,
             destinationAccountUuid: $transferRequest->destinationAccountUuid,
             amount: Money::make($transferRequest->amount, $transferRequest->currency),
+            idempotencyKey: $idempotencyKey,
+            requestHash: hash('sha256', $request->getContent()),
         );
 
         $transfer = $this->transferHandler->handle($transferCommand);
