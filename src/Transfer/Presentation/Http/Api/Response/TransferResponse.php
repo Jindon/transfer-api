@@ -7,16 +7,23 @@ namespace App\Transfer\Presentation\Http\Api\Response;
 use App\Shared\Money\Money;
 use App\Transfer\Domain\Transfer;
 use DateTimeInterface;
+use Symfony\Component\Serializer\Attribute\Ignore;
+use Symfony\Component\Serializer\Attribute\SerializedName;
 
-class TransferResponse
+final readonly class TransferResponse
 {
     public function __construct(
+        #[Ignore]
         public int $id,
         public string $uuid,
         public string $status,
         public string $sourceAccountUuid,
         public string $destinationAccountUuid,
+
+        #[Ignore]
         public int $amount,
+
+        #[Ignore]
         public string $currency,
         public ?string $reference,
         public string $createdAt,
@@ -40,17 +47,12 @@ class TransferResponse
         );
     }
 
-    public function toArray(): array
+    #[SerializedName('amount')]
+    public function getFormattedAmount(): string
     {
-        return [
-            'uuid' => $this->uuid,
-            'status' => $this->status,
-            'sourceAccountUuid' => $this->sourceAccountUuid,
-            'destinationAccountUuid' => $this->destinationAccountUuid,
-            'amount' => Money::make($this->amount, $this->currency)->present(),
-            'reference' => $this->reference,
-            'createdAt' => $this->createdAt,
-            'completedAt' => $this->completedAt,
-        ];
+        return Money::make(
+            $this->amount,
+            $this->currency,
+        )->present();
     }
 }

@@ -41,6 +41,6 @@ final class TransferController extends AbstractController
 
         $transfer = $this->transferHandler->handle($transferCommand);
 
-        return $this->json(TransferResponse::fromEntity($transfer)->toArray());
+        return $this->json(TransferResponse::fromEntity($transfer));
     }
 }
