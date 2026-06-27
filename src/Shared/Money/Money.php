@@ -34,7 +34,7 @@ final readonly class Money
      */
     public function present(): string
     {
-        $amount = number_format($this->amount, 2, '.', ',');
+        $amount = number_format($this->amount / 100, 2, '.', ',');
 
         return $this->getCurrencyCode().' '.$amount;
     }

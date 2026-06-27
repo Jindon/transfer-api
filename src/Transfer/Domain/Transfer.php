@@ -68,6 +68,11 @@ class Transfer
         $this->failureReason = $reason;
     }
 
+    public function isPending(): bool
+    {
+        return TransferStatus::PENDING === $this->status;
+    }
+
     public function getId(): ?int
     {
         return $this->id;
@@ -132,11 +137,6 @@ class Transfer
         $this->status = $status;
 
         return $this;
-    }
-
-    public function isPending(): bool
-    {
-        return TransferStatus::PENDING === $this->status;
     }
 
     public function getReference(): ?string
