@@ -21,3 +21,7 @@ services:
 
     # add more service definitions when explicit configuration is needed
     # please note that last definitions always *replace* previous ones
+
+    # Interface bindings
+    App\Account\Domain\Repository\AccountRepositoryInterface: '@App\Account\Infrastructure\Persistence\Doctrine\DoctrineAccountRepository'
+    App\Transfer\Domain\Repository\TransferRepositoryInterface: '@App\Transfer\Infrastructure\Persistence\Doctrine\DoctrineTransferRepository'
