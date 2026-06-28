@@ -9,6 +9,8 @@ use App\Account\Domain\Exception\AccountNotFoundException;
 use App\Account\Domain\Repository\AccountRepositoryInterface;
 use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface;
+use App\Ledger\Domain\Repository\LedgerEntryRepositoryInterface;
+use App\Shared\Money\Money;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use App\Transfer\Domain\Exception\TransferConflictException;
@@ -31,6 +33,7 @@ readonly class TransferHandler
         private TransactionRunner $transferProcessor,
         private TransferRepositoryInterface $transferRepository,
         private IdempotencyRequestRepositoryInterface $idempotencyRequestRepository,
+        private LedgerEntryRepositoryInterface $ledgerEntryRepository,
         private CacheItemPoolInterface $replayCache,
         private LoggerInterface $logger,
     ) {
@@ -41,6 +44,9 @@ readonly class TransferHandler
      */
     public function handle(TransferCommand $command): Transfer
     {
+        /**
+         * If request is duplicate, then check cache and return immediately.
+         */
         $cached = $this->fromReplayCache($command);
         if ($cached) {
             return $cached;
@@ -85,6 +91,13 @@ readonly class TransferHandler
 
                 $sourceAccount->debit($transfer->getAmount());
                 $destinationAccount->credit($transfer->getAmount());
+
+                $this->ledgerEntryRepository->recordDoubleEntry(
+                    transfer: $transfer,
+                    source: $sourceAccount,
+                    destination: $destinationAccount,
+                    amount: Money::make($transfer->getAmount(), $transfer->getCurrency()),
+                );
 
                 /*
                  * If fees are involved, we can handle it here as well
