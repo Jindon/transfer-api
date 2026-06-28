@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Transfer\Presentation\Http\Api\Request;
 
+use App\Shared\Money\Currency;
 use Symfony\Component\Validator\Constraints as Assert;
 
 class TransferRequest
@@ -19,7 +20,7 @@ class TransferRequest
         #[Assert\NotNull, Assert\Positive, Assert\Type('integer')]
         public int $amount,
 
-        #[Assert\NotNull, Assert\Length(exactly: 3), Assert\Currency]
+        #[Assert\NotNull, Assert\Choice(choices: Currency::SUPPORTED_CURRENCIES, message: 'Currency "{{ value }}" is not supported.')]
         public string $currency,
 
         #[Assert\Length(max: 255)]

@@ -9,4 +9,8 @@ class Currency
     public const string EUR = 'EUR';
     public const string USD = 'USD';
     public const string GBP = 'GBP';
+
+    public const array SUPPORTED_CURRENCIES = [
+        self::EUR,
+    ];
 }

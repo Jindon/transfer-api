@@ -100,6 +100,15 @@ class TransferRequestTest extends KernelTestCase
                 ),
                 'currency',
             ],
+            'unsupported currency' => [
+                new TransferRequest(
+                    (string) Uuid::v7(),
+                    (string) Uuid::v7(),
+                    1000,
+                    Currency::USD,
+                ),
+                'currency',
+            ],
         ];
     }
 }

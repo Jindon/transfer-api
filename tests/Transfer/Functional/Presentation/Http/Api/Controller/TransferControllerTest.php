@@ -103,6 +103,27 @@ class TransferControllerTest extends WebTestCase
         self::assertResponseStatusCodeSame(422);
     }
 
+    public function testUnsupportedCurrencyReturnsValidationError(): void
+    {
+        $client = $this->createClient();
+
+        $client->request(
+            'POST',
+            '/api/transfers',
+            server: $this->apiHeaders([
+                'HTTP_IDEMPOTENCY_KEY' => 'idem-123',
+            ]),
+            content: json_encode([
+                'sourceAccountUuid' => (string) Uuid::v7(),
+                'destinationAccountUuid' => (string) Uuid::v7(),
+                'amount' => 1000,
+                'currency' => 'USD',
+            ])
+        );
+
+        self::assertResponseStatusCodeSame(422);
+    }
+
     #[AllowMockObjectsWithoutExpectations]
     public function testShowTransfer(): void
     {
