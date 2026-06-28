@@ -1,0 +1,9 @@
+.git
+.env.local
+.env.*.local
+var/
+vendor/
+.idea/
+.phpunit.cache/
+.php-cs-fixer.cache
+tests/

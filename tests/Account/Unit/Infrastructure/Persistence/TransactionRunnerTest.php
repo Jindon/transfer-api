@@ -14,7 +14,6 @@ use PHPUnit\Framework\TestCase;
 use Psr\Log\LoggerInterface;
 use RuntimeException;
 
-#[AllowMockObjectsWithoutExpectations]
 final class TransactionRunnerTest extends TestCase
 {
     private MockObject|EntityManagerInterface $entityManager;
@@ -30,6 +29,7 @@ final class TransactionRunnerTest extends TestCase
         $this->entityManager->method('getConnection')->willReturn($this->connection);
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunReturnsWorkResult(): void
     {
         $this->connection->expects($this->once())->method('beginTransaction');
@@ -41,6 +41,7 @@ final class TransactionRunnerTest extends TestCase
         $this->assertSame('ok', $result);
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunRollsBackAndRethrowsOnNonRetryableException(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(1);
@@ -54,6 +55,7 @@ final class TransactionRunnerTest extends TestCase
         $this->makeRunner()->run(function () { throw new RuntimeException('boom'); });
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunSkipsRollbackWhenNoActiveTransaction(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(0);
@@ -64,6 +66,7 @@ final class TransactionRunnerTest extends TestCase
         $this->makeRunner()->run(function () { throw new RuntimeException(); });
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunRetriesOnDeadlockAndSucceeds(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(1);
@@ -87,6 +90,7 @@ final class TransactionRunnerTest extends TestCase
         $this->assertSame('done', $result);
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunRetriesOnLockWaitTimeoutAndSucceeds(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(1);
@@ -106,6 +110,7 @@ final class TransactionRunnerTest extends TestCase
         $this->assertSame('done', $result);
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunThrowsAfterExhaustingRetries(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(1);
@@ -129,6 +134,7 @@ final class TransactionRunnerTest extends TestCase
         $this->makeRunner(maxAttempts: 2)->run(function () use ($exception) { throw $exception; });
     }
 
+    #[AllowMockObjectsWithoutExpectations]
     public function testRunDoesNotRetryNonRetryableExceptionEvenWithAttemptsRemaining(): void
     {
         $this->connection->method('getTransactionNestingLevel')->willReturn(1);

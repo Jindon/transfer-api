@@ -40,7 +40,7 @@ class Transfer
     private TransferStatus $status;
 
     #[ORM\Column(length: 255, nullable: true)]
-    private ?string $reference;
+    private ?string $reference = null;
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $failureReason;
