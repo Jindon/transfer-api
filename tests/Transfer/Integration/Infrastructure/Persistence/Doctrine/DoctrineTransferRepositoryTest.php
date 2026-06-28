@@ -12,6 +12,7 @@ use App\Transfer\Domain\Repository\TransferRepositoryInterface;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Test\KernelTestCase;
+use Symfony\Component\Uid\Uuid;
 
 class DoctrineTransferRepositoryTest extends KernelTestCase
 {
@@ -48,6 +49,29 @@ class DoctrineTransferRepositoryTest extends KernelTestCase
     {
         $this->assertNull(
             $this->transferRepository->findById(999999)
+        );
+    }
+
+    public function testFindByUuidReturnsTransfer(): void
+    {
+        $transfer = Genie::makeTransfer();
+
+        $this->entityManager->persist($transfer->getSourceAccount());
+        $this->entityManager->persist($transfer->getDestinationAccount());
+        $this->entityManager->persist($transfer);
+        $this->entityManager->flush();
+        $this->entityManager->clear();
+
+        $result = $this->transferRepository->findByUuid((string) $transfer->getUuid());
+
+        $this->assertNotNull($result);
+        $this->assertSame((string) $transfer->getUuid(), (string) $result->getUuid());
+    }
+
+    public function testFindByUuidReturnsNullWhenTransferDoesNotExist(): void
+    {
+        $this->assertNull(
+            $this->transferRepository->findByUuid((string) Uuid::v7())
         );
     }
 

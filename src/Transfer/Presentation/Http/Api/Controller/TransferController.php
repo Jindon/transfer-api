@@ -8,6 +8,8 @@ use App\Idempotency\Domain\Exception\MissingIdempotencyKeyException;
 use App\Shared\Money\Money;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Application\Handler\TransferHandler;
+use App\Transfer\Domain\Exception\TransferNotFoundException;
+use App\Transfer\Domain\Repository\TransferRepositoryInterface;
 use App\Transfer\Presentation\Http\Api\Request\TransferRequest;
 use App\Transfer\Presentation\Http\Api\Response\TransferResponse;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -20,6 +22,7 @@ final class TransferController extends AbstractController
 {
     public function __construct(
         private readonly TransferHandler $transferHandler,
+        private readonly TransferRepositoryInterface $transferRepository,
     ) {
     }
 
@@ -40,6 +43,15 @@ final class TransferController extends AbstractController
         );
 
         $transfer = $this->transferHandler->handle($transferCommand);
+
+        return $this->json(TransferResponse::fromEntity($transfer));
+    }
+
+    #[Route('/api/transfers/{uuid}', name: 'show_transfer', methods: ['GET'])]
+    public function show(string $uuid): JsonResponse
+    {
+        $transfer = $this->transferRepository->findByUuid($uuid)
+            ?? throw new TransferNotFoundException($uuid);
 
         return $this->json(TransferResponse::fromEntity($transfer));
     }

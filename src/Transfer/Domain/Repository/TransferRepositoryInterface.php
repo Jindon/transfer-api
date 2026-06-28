@@ -11,6 +11,8 @@ interface TransferRepositoryInterface
 {
     public function findById(int $id): ?Transfer;
 
+    public function findByUuid(string $uuid): ?Transfer;
+
     public function createPending(
         Account $sourceAccount,
         Account $destinationAccount,

@@ -10,6 +10,7 @@ use App\Idempotency\Domain\Exception\MissingIdempotencyKeyException;
 use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use App\Transfer\Domain\Exception\TransferConflictException;
+use App\Transfer\Domain\Exception\TransferNotFoundException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -29,6 +30,7 @@ class ExceptionListener
             $e instanceof RequestHashMismatchException => [409, 'request-hash-mismatch', $e->getMessage()],
             $e instanceof MissingIdempotencyKeyException => [400, 'missing-idempotency-key-header', $e->getMessage()],
             $e instanceof TransferConflictException => [409, 'transfer-conflict', $e->getMessage()],
+            $e instanceof TransferNotFoundException => [404, 'not-found', $e->getMessage()],
             default => [null, null, null],
         };
 

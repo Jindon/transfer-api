@@ -8,6 +8,7 @@ use App\Shared\Money\Currency;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Application\Handler\TransferHandler;
 use App\Transfer\Domain\Enum\TransferStatus;
+use App\Transfer\Domain\Repository\TransferRepositoryInterface;
 use App\Transfer\Domain\Transfer;
 use DateTimeImmutable;
 use PHPUnit\Framework\Attributes\AllowMockObjectsWithoutExpectations;
@@ -100,6 +101,43 @@ class TransferControllerTest extends WebTestCase
         );
 
         self::assertResponseStatusCodeSame(422);
+    }
+
+    #[AllowMockObjectsWithoutExpectations]
+    public function testShowTransfer(): void
+    {
+        $client = $this->createClient();
+        $uuid = (string) Uuid::v7();
+
+        $transfer = $this->mockTransfer(['getUuid' => Uuid::fromString($uuid)]);
+
+        $repository = $this->createMock(TransferRepositoryInterface::class);
+        $repository->expects($this->once())
+            ->method('findByUuid')
+            ->with($uuid)
+            ->willReturn($transfer);
+
+        $this->getContainer()->set(TransferRepositoryInterface::class, $repository);
+
+        $client->request('GET', '/api/transfers/'.$uuid, server: $this->apiHeaders());
+
+        $this->assertResponseIsSuccessful();
+    }
+
+    #[AllowMockObjectsWithoutExpectations]
+    public function testShowTransferNotFound(): void
+    {
+        $client = $this->createClient();
+        $uuid = (string) Uuid::v7();
+
+        $repository = $this->createMock(TransferRepositoryInterface::class);
+        $repository->method('findByUuid')->willReturn(null);
+
+        $this->getContainer()->set(TransferRepositoryInterface::class, $repository);
+
+        $client->request('GET', '/api/transfers/'.$uuid, server: $this->apiHeaders());
+
+        self::assertResponseStatusCodeSame(404);
     }
 
     private function apiHeaders(array $headers = []): array

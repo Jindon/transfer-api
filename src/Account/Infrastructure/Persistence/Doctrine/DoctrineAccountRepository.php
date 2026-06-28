@@ -22,6 +22,11 @@ readonly class DoctrineAccountRepository implements AccountRepositoryInterface
         return $this->entityManager->getRepository(Account::class)->findOneBy(['uuid' => $uuid]);
     }
 
+    public function findAll(): array
+    {
+        return $this->entityManager->getRepository(Account::class)->findAll();
+    }
+
     /**
      * @throws OptimisticLockException
      * @throws ORMException

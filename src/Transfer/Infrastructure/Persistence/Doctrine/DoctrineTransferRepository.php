@@ -27,6 +27,11 @@ readonly class DoctrineTransferRepository implements TransferRepositoryInterface
         return $this->entityManager->find(Transfer::class, $id);
     }
 
+    public function findByUuid(string $uuid): ?Transfer
+    {
+        return $this->entityManager->getRepository(Transfer::class)->findOneBy(['uuid' => $uuid]);
+    }
+
     public function createPending(
         Account $sourceAccount,
         Account $destinationAccount,

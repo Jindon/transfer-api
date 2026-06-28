@@ -71,6 +71,24 @@ class DoctrineAccountRepositoryTest extends KernelTestCase
         $this->assertNull($result);
     }
 
+    public function testFindAllReturnsPersistedAccounts(): void
+    {
+        $account1 = Genie::makeAccount();
+        $account2 = Genie::makeAccount();
+
+        $this->entityManager->persist($account1);
+        $this->entityManager->persist($account2);
+        $this->entityManager->flush();
+        $this->entityManager->clear();
+
+        $results = $this->accountRepository->findAll();
+
+        $uuids = array_map(fn ($a) => (string) $a->getUuid(), $results);
+
+        $this->assertContains((string) $account1->getUuid(), $uuids);
+        $this->assertContains((string) $account2->getUuid(), $uuids);
+    }
+
     public function testGetOrderedLockForUpdateReturnsAccountsOrderedById(): void
     {
         $account1 = Genie::makeAccount();

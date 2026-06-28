@@ -10,6 +10,9 @@ interface AccountRepositoryInterface
 {
     public function findByUuid(string $uuid): ?Account;
 
+    /** @return Account[] */
+    public function findAll(): array;
+
     public function getOrderedLockForUpdate(array $ids): array;
 
     public function save(Account $account): void;
