@@ -1,0 +1,17 @@
+framework:
+    messenger:
+        transports:
+            sync: 'sync://'
+            # async: '%env(MESSENGER_TRANSPORT_DSN)%'  # Redis — set MESSENGER_TRANSPORT_DSN=redis://localhost:6379/transfer_events
+
+        routing:
+            App\Transfer\Domain\Event\TransferCreated: sync
+            App\Transfer\Domain\Event\TransferCompleted: sync
+            App\Transfer\Domain\Event\TransferFailed: sync
+            # To go async, change all three values above to: async
+
+when@test:
+    framework:
+        messenger:
+            transports:
+                async: 'in-memory://'

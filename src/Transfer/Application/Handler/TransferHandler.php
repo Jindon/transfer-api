@@ -12,6 +12,9 @@ use App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface;
 use App\Ledger\Domain\Repository\LedgerEntryRepositoryInterface;
 use App\Shared\Money\Money;
 use App\Transfer\Application\Command\TransferCommand;
+use App\Transfer\Domain\Event\TransferCompleted;
+use App\Transfer\Domain\Event\TransferCreated;
+use App\Transfer\Domain\Event\TransferFailed;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use App\Transfer\Domain\Exception\TransferConflictException;
 use App\Transfer\Domain\Repository\TransferRepositoryInterface;
@@ -21,6 +24,7 @@ use DateTimeImmutable;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Psr\Cache\CacheItemPoolInterface;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Messenger\MessageBusInterface;
 use Symfony\Component\Uid\Ulid;
 use Throwable;
 
@@ -36,6 +40,7 @@ readonly class TransferHandler
         private LedgerEntryRepositoryInterface $ledgerEntryRepository,
         private CacheItemPoolInterface $replayCache,
         private LoggerInterface $logger,
+        private MessageBusInterface $messageBus,
     ) {
     }
 
@@ -70,6 +75,8 @@ readonly class TransferHandler
         $transferId = $pendingTransfer->getId();
 
         $this->idempotencyRequestRepository->attach($command->idempotencyKey, Transfer::class, $transferId);
+
+        $this->messageBus->dispatch(new TransferCreated($transferId));
 
         try {
             $transfer = $this->transferProcessor->run(function () use ($transferId) {
@@ -113,6 +120,7 @@ readonly class TransferHandler
             });
 
             $this->toReplayCache($command->idempotencyKey, $command->requestHash, $transfer);
+            $this->messageBus->dispatch(new TransferCompleted($transfer->getId()));
 
             return $transfer;
         } catch (Throwable $e) {
@@ -123,6 +131,12 @@ readonly class TransferHandler
                 'transfer_id' => $transferId,
                 'reason' => $e->getMessage(),
             ]);
+
+            try {
+                $this->messageBus->dispatch(new TransferFailed($transferId));
+            } catch (Throwable) {
+                // Bus failure must not mask the original transfer exception
+            }
 
             throw $e;
         }
