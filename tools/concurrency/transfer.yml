@@ -1,0 +1,34 @@
+name: Transfer API
+
+run:
+  requests: 20 # total number of requests to send
+  concurrency: 10 # max in-flight requests at once
+  timeout: 5000 # per-request timeout in milliseconds
+
+request:
+  method: POST
+  url: http://localhost:8000/api/transfers
+
+headers:
+  X-Api-Key: super_secure_api_key
+  Content-Type: application/json
+  Idempotency-Key: "{{uuid}}"
+
+body:
+  sourceAccountUuid: 019f11ca-f24c-794b-b759-33470648b472
+  destinationAccountUuid: 019f11ca-f247-7652-a66e-4f5b3c3da0c4
+  amount: 100
+  currency: EUR
+
+# Optional: fail if observed status code counts don't match.
+# Omit this section to run without assertions.
+#
+expect:
+   status_codes:
+     200: 20
+#
+# Idempotency example — exactly one success, rest rejected:
+# expect:
+#   status_codes:
+#     201: 1
+#     409: 9999
