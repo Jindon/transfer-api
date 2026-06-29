@@ -192,17 +192,17 @@ curl http://localhost:8000/api/transfers/0196b1a4-... \
 
 All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) (`application/problem+json`):
 
-| Scenario | Status | `type` |
-|---|---|---|
-| Missing `X-Api-Key` | 401 | — |
-| Missing `Idempotency-Key` | 400 | `missing-idempotency-key-header` |
-| Validation failure | 422 | — |
-| Insufficient funds | 422 | `insufficient-funds` |
-| Account not found | 404 | `not-found` |
-| Transfer not found | 404 | `not-found` |
-| Duplicate idempotency key (in-flight) | 409 | `transfer-conflict` |
-| Idempotency key reused with different payload | 409 | `request-hash-mismatch` |
-| Transfer already processed | 409 | `already-processed` |
+| Scenario | Status | `type`                             |
+|---|---|------------------------------------|
+| Missing `X-Api-Key` | 401 | `unauthorized`                     |
+| Missing `Idempotency-Key` | 400 | `missing-idempotency-key-header`   |
+| Validation failure | 422 | `default symfony's validation type` |
+| Insufficient funds | 422 | `insufficient-funds`               |
+| Account not found | 404 | `not-found`                        |
+| Transfer not found | 404 | `not-found`                        |
+| Duplicate idempotency key (in-flight) | 409 | `transfer-conflict`                |
+| Idempotency key reused with different payload | 409 | `request-hash-mismatch`            |
+| Transfer already processed | 409 | `already-processed`                |
 
 ---
 

@@ -25,12 +25,12 @@ class ExceptionListener
 
         [$status, $type, $detail] = match (true) {
             $e instanceof InsufficientFundException => [422, 'insufficient-funds', $e->getMessage()],
+            $e instanceof TransferNotFoundException,
             $e instanceof AccountNotFoundException => [404, 'not-found', $e->getMessage()],
             $e instanceof TransferAlreadyProcessedException => [409, 'already-processed', $e->getMessage()],
             $e instanceof RequestHashMismatchException => [409, 'request-hash-mismatch', $e->getMessage()],
             $e instanceof MissingIdempotencyKeyException => [400, 'missing-idempotency-key-header', $e->getMessage()],
             $e instanceof TransferConflictException => [409, 'transfer-conflict', $e->getMessage()],
-            $e instanceof TransferNotFoundException => [404, 'not-found', $e->getMessage()],
             default => [null, null, null],
         };
 
