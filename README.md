@@ -288,7 +288,15 @@ composer cs-fix
 
 - **Observability** - the application logs via Monolog but does not yet expose telemetry in a way that external systems can reliably consume.
 
-- **Concurrency / load tests** — the deadlock-prevention and retry logic is covered by unit tests but has not been exercised under concurrent load. May be using a dedicated load-testing tool (k6, Gatling, or Locust) with a scenario that hammers the same pair of accounts simultaneously.
+- **Concurrency / load tests** — the deadlock-prevention and retry logic is covered by unit tests. A lightweight concurrency scenario is included under `tools/concurrency/` using [concurrency-test](https://github.com/Jindon/concurrency-test), a purpose-built Elixir CLI tool I built specifically for this project to detect race conditions, idempotency failures, and deadlocks under controlled concurrent load.
+
+  Run it with Docker up (requires Elixir/Erlang on the host). On macOS, Gatekeeper may block the binary as it is unsigned — if so, run `xattr -dr com.apple.quarantine tools/concurrency/concurrency-test` once to allow it:
+
+  ```bash
+  tools/concurrency/concurrency-test tools/concurrency/transfer.yml
+  ```
+
+  The scenario (`transfer.yml`) fires 20 transfer requests at 10 concurrent workers against the same account pair, each with a unique `Idempotency-Key`, and asserts all 20 return 200. This validates that the ordered-lock strategy and retry logic hold under real concurrency. The account UUIDs in the scenario file are seeded by `app:seed:accounts` — update them if your local seed produced different UUIDs.
 
 ---
 
