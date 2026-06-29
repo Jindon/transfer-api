@@ -1,0 +1,73 @@
+name: Build & Test
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+permissions:
+  contents: read
+
+jobs:
+  symfony-tests:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: ''
+          MYSQL_ALLOW_EMPTY_PASSWORD: yes
+          MYSQL_DATABASE: transfer_api
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: shivammathur/setup-php@2cb9b829437ee246e9b3cac53555a39208ca6d28
+        with:
+          php-version: '8.5'
+          extensions: pdo_mysql, intl
+
+      - name: Cache Composer packages
+        uses: actions/cache@v3
+        with:
+          path: vendor
+          key: ${{ runner.os }}-php-${{ hashFiles('**/composer.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-php-
+
+      - name: Install dependencies
+        run: composer install -q --no-ansi --no-interaction --no-scripts --no-progress --prefer-dist
+
+      - name: Create test database and schema
+        env:
+          DATABASE_URL: mysql://root:@127.0.0.1:3306/transfer_api?serverVersion=8.0&charset=utf8mb4
+        run: |
+          php bin/console doctrine:database:create --env=test
+          php bin/console doctrine:schema:create --env=test
+
+      - name: Run tests
+        env:
+          DATABASE_URL: mysql://root:@127.0.0.1:3306/transfer_api?serverVersion=8.0&charset=utf8mb4
+          REDIS_URL: redis://127.0.0.1:6379
+          MESSENGER_TRANSPORT_DSN: redis://127.0.0.1:6379/transfer_events
+          API_KEY: super_secure_api_key
+        run: vendor/bin/phpunit
