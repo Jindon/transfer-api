@@ -19,11 +19,7 @@ final readonly class TransferResponse
         public string $status,
         public string $sourceAccountUuid,
         public string $destinationAccountUuid,
-
-        #[Ignore]
         public int $amount,
-
-        #[Ignore]
         public string $currency,
         public ?string $reference,
         public string $createdAt,
@@ -42,12 +38,12 @@ final readonly class TransferResponse
             amount: $transfer->getAmount(),
             currency: $transfer->getCurrency(),
             reference: $transfer->getReference(),
-            createdAt: $transfer->getCreatedAt()->format(DateTimeInterface::ATOM),
-            completedAt: $transfer->getCompletedAt()->format(DateTimeInterface::ATOM),
+            createdAt: $transfer->getCreatedAt()?->format(DateTimeInterface::ATOM),
+            completedAt: $transfer->getCompletedAt()?->format(DateTimeInterface::ATOM),
         );
     }
 
-    #[SerializedName('amount')]
+    #[SerializedName('formatted_amount')]
     public function getFormattedAmount(): string
     {
         return Money::make(
