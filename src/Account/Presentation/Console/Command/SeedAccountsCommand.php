@@ -3,7 +3,9 @@
 namespace App\Account\Presentation\Console\Command;
 
 use App\Account\Domain\Account;
+use App\Ledger\Domain\LedgerEntry;
 use App\Shared\Money\Currency;
+use App\Shared\Money\Money;
 use DateTimeImmutable;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
@@ -44,6 +46,10 @@ class SeedAccountsCommand extends Command
                 $account->setCreatedAt($now);
                 $account->setUpdatedAt($now);
                 $this->entityManager->persist($account);
+
+                $this->entityManager->persist(
+                    LedgerEntry::makeOpening($account, Money::make($balance, $currency), $now)
+                );
             }
 
             $this->entityManager->flush();

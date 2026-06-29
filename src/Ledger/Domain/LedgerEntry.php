@@ -59,6 +59,21 @@ class LedgerEntry
         return $ledgerEntry;
     }
 
+    public static function makeOpening(
+        Account $account,
+        Money $amount,
+        DateTimeImmutable $createdAt,
+    ): LedgerEntry {
+        $ledgerEntry = new LedgerEntry();
+        $ledgerEntry->setAccount($account);
+        $ledgerEntry->setLedgerDirection(LedgerDirection::CREDIT);
+        $ledgerEntry->setAmount($amount->getAmount());
+        $ledgerEntry->setCurrency($amount->getCurrencyCode());
+        $ledgerEntry->setCreatedAt($createdAt);
+
+        return $ledgerEntry;
+    }
+
     public function getId(): ?int
     {
         return $this->id;

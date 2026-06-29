@@ -28,7 +28,9 @@ class SeedAccountsCommandTest extends KernelTestCase
         $connection = self::getContainer()->get(Connection::class);
 
         $rowCount = $connection->fetchOne('SELECT COUNT(*) FROM accounts');
-
         $this->assertEquals(4, (int) $rowCount);
+
+        $ledgerCount = $connection->fetchOne('SELECT COUNT(*) FROM ledger_entries WHERE transfer_id IS NULL');
+        $this->assertEquals(4, (int) $ledgerCount);
     }
 }
