@@ -11,6 +11,8 @@ use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use App\Transfer\Domain\Exception\TransferConflictException;
 use App\Transfer\Domain\Exception\TransferNotFoundException;
+use App\Txm\Domain\Exception\QuarantineAlreadyReviewedException;
+use App\Txm\Domain\Exception\TransferNotQuarantinedException;
 use Symfony\Component\EventDispatcher\Attribute\AsEventListener;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpKernel\Event\ExceptionEvent;
@@ -31,6 +33,8 @@ class ExceptionListener
             $e instanceof RequestHashMismatchException => [409, 'request-hash-mismatch', $e->getMessage()],
             $e instanceof MissingIdempotencyKeyException => [400, 'missing-idempotency-key-header', $e->getMessage()],
             $e instanceof TransferConflictException => [409, 'transfer-conflict', $e->getMessage()],
+            $e instanceof TransferNotQuarantinedException => [409, 'transfer-not-quarantined', $e->getMessage()],
+            $e instanceof QuarantineAlreadyReviewedException => [409, 'quarantine-already-reviewed', $e->getMessage()],
             default => [null, null, null],
         };
 

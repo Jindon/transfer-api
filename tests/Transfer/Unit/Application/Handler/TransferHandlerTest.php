@@ -10,11 +10,11 @@ use App\Account\Domain\Repository\AccountRepositoryInterface;
 use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Idempotency\Domain\IdempotencyRequest;
 use App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface;
-use App\Ledger\Domain\Repository\LedgerEntryRepositoryInterface;
 use App\Shared\Money\Money;
 use App\Tests\Support\Genie;
 use App\Transfer\Application\Command\TransferCommand;
 use App\Transfer\Application\Handler\TransferHandler;
+use App\Transfer\Application\Service\MoneyMover;
 use App\Transfer\Domain\Event\TransferCompleted;
 use App\Transfer\Domain\Event\TransferCreated;
 use App\Transfer\Domain\Event\TransferFailed;
@@ -22,6 +22,8 @@ use App\Transfer\Domain\Exception\TransferConflictException;
 use App\Transfer\Domain\Repository\TransferRepositoryInterface;
 use App\Transfer\Domain\Transfer;
 use App\Transfer\Infrastructure\Persistence\TransactionRunner;
+use App\Txm\Domain\Repository\QuarantinedTransferRepositoryInterface;
+use App\Txm\Domain\Service\TransactionMonitorInterface;
 use Doctrine\DBAL\Connection;
 use Doctrine\DBAL\Driver\Exception as DriverException;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
@@ -45,7 +47,9 @@ final class TransferHandlerTest extends TestCase
     private MockObject|AccountRepositoryInterface $accountRepository;
     private MockObject|TransferRepositoryInterface $transferRepository;
     private MockObject|IdempotencyRequestRepositoryInterface $idempotencyRepository;
-    private MockObject|LedgerEntryRepositoryInterface $ledgerRepository;
+    private MockObject|MoneyMover $moneyMover;
+    private MockObject|TransactionMonitorInterface $transactionMonitor;
+    private MockObject|QuarantinedTransferRepositoryInterface $quarantineRepository;
     private MockObject|CacheItemPoolInterface $cache;
     private MockObject|LoggerInterface $logger;
     private MockObject|MessageBusInterface $messageBus;
@@ -56,7 +60,10 @@ final class TransferHandlerTest extends TestCase
         $this->accountRepository = $this->createMock(AccountRepositoryInterface::class);
         $this->transferRepository = $this->createMock(TransferRepositoryInterface::class);
         $this->idempotencyRepository = $this->createMock(IdempotencyRequestRepositoryInterface::class);
-        $this->ledgerRepository = $this->createMock(LedgerEntryRepositoryInterface::class);
+        $this->moneyMover = $this->createMock(MoneyMover::class);
+        $this->transactionMonitor = $this->createMock(TransactionMonitorInterface::class);
+        $this->transactionMonitor->method('check')->willReturn(true);
+        $this->quarantineRepository = $this->createMock(QuarantinedTransferRepositoryInterface::class);
         $this->cache = $this->createMock(CacheItemPoolInterface::class);
         $this->logger = $this->createMock(LoggerInterface::class);
         $this->messageBus = $this->createMock(MessageBusInterface::class);
@@ -183,7 +190,7 @@ final class TransferHandlerTest extends TestCase
             ->willReturnCallback(fn (string $uuid) => $uuid === $command->sourceAccountUuid ? $sourceAccount : $destAccount);
 
         $this->transferRepository->method('createPending')->willReturn($pendingTransfer);
-        $this->transferRepository->expects($this->once())->method('findById')
+        $this->moneyMover->expects($this->once())->method('execute')
             ->with(99)
             ->willThrowException(new RuntimeException('db exploded'));
 
@@ -229,9 +236,7 @@ final class TransferHandlerTest extends TestCase
         $this->accountRepository->method('findByUuid')
             ->willReturnCallback(fn (string $uuid) => $uuid === $command->sourceAccountUuid ? $srcAccount : $dstAccount);
         $this->transferRepository->method('createPending')->willReturn($pendingTransfer);
-        $this->transferRepository->method('findById')->willReturn($pendingTransfer);
-        $this->accountRepository->method('getOrderedLockForUpdate')
-            ->willReturn([1 => $srcAccount, 2 => $dstAccount]);
+        $this->moneyMover->method('execute')->willReturn($pendingTransfer);
 
         $dispatched = [];
         $this->messageBus->method('dispatch')
@@ -250,6 +255,30 @@ final class TransferHandlerTest extends TestCase
         $this->assertSame(99, $dispatched[1]->transferId);
     }
 
+    public function testHandleQuarantinesTransferWhenTxmFails(): void
+    {
+        $this->cacheMiss();
+        $command = $this->makeCommand();
+
+        $sourceAccount = Genie::makeAccount();
+        $destAccount = Genie::makeAccount();
+        $pendingTransfer = Genie::makeTransfer($sourceAccount, $destAccount);
+        $this->setId($pendingTransfer, 55);
+
+        $this->accountRepository->method('findByUuid')
+            ->willReturnCallback(fn (string $uuid) => $uuid === $command->sourceAccountUuid ? $sourceAccount : $destAccount);
+        $this->transferRepository->method('createPending')->willReturn($pendingTransfer);
+
+        $this->transactionMonitor = $this->createMock(TransactionMonitorInterface::class);
+        $this->transactionMonitor->method('check')->willReturn(false);
+        $this->quarantineRepository->expects($this->once())->method('quarantine')->with($pendingTransfer);
+        $this->moneyMover->expects($this->never())->method('execute');
+
+        $result = $this->makeHandler()->handle($command);
+
+        $this->assertSame($pendingTransfer, $result);
+    }
+
     private function makeHandler(): TransferHandler
     {
         return new TransferHandler(
@@ -257,7 +286,9 @@ final class TransferHandlerTest extends TestCase
             $this->runner,
             $this->transferRepository,
             $this->idempotencyRepository,
-            $this->ledgerRepository,
+            $this->moneyMover,
+            $this->transactionMonitor,
+            $this->quarantineRepository,
             $this->cache,
             $this->logger,
             $this->messageBus,

@@ -10,6 +10,7 @@ Modules under `src/` follow a per-feature DDD layout: `Domain` → `Application`
 src/
 ├── Account/       # Account entity, balance mutations
 ├── Transfer/      # Core transfer flow (command → handler → DB transaction)
+├── Txm/           # Transaction monitoring hook and quarantine review flow
 ├── Idempotency/   # Key reservation and Redis replay cache
 ├── Ledger/        # Double-entry bookkeeping for completed transfers
 ├── Security/      # API key authenticator
@@ -23,9 +24,10 @@ src/
 1. Controller maps the request to a `TransferCommand` with a SHA-256 body hash.
 2. Handler checks the Redis replay cache - on a hit, returns the cached result without touching the DB.
 3. On a cache miss, the handler reserves the idempotency key via a unique-constraint INSERT.
-4. `TransactionRunner` locks source and destination accounts in a deterministic order (by ID) to prevent deadlocks, debits/credits balances, writes double-entry ledger rows, and marks the transfer `COMPLETED`. Retries up to 3× on deadlock/lock-timeout with exponential backoff + jitter.
-5. On success, the result is written to Redis (24 h TTL).
-6. On failure, the transfer is marked `FAILED` and the idempotency key is released.
+4. **TXM hook** — `TransactionMonitorInterface::check()` runs against the pending transfer. If flagged, the transfer is written to `quarantined_transfers` for manual review and the response is returned as `pending` (the client is unaware of the quarantine). No money moves until a reviewer approves it.
+5. If the TXM check passes, `TransactionRunner` locks source and destination accounts in a deterministic order (by ID) to prevent deadlocks, debits/credits balances, writes double-entry ledger rows, and marks the transfer `COMPLETED`. Retries up to 3× on deadlock/lock-timeout with exponential backoff + jitter.
+6. On success, the result is written to Redis (24 h TTL).
+7. On failure, the transfer is marked `FAILED` and the idempotency key is released.
 
 ### Key design decisions
 
@@ -188,6 +190,64 @@ curl http://localhost:8000/api/transfers/0196b1a4-... \
   -H "X-Api-Key: super_secure_api_key"
 ```
 
+#### Approve a quarantined transfer
+
+```
+POST /api/transfers/{uuid}/approve
+```
+
+Runs the money movement for a transfer that was held by the TXM hook. Returns the transfer in `completed` status.
+
+```bash
+curl -X POST http://localhost:8000/api/transfers/0196b1a4-.../approve \
+  -H "X-Api-Key: super_secure_api_key"
+```
+
+```json
+{
+  "uuid": "0196b1a4-...",
+  "status": "completed",
+  "sourceAccountUuid": "0196b1a2-...",
+  "destinationAccountUuid": "0196b1a3-...",
+  "amount": 100000,
+  "currency": "EUR",
+  "formatted_amount": "EUR 1000.00",
+  "reference": null,
+  "createdAt": "2026-06-28T10:01:00+00:00",
+  "completedAt": "2026-06-28T10:02:00+00:00"
+}
+```
+
+#### Deny a quarantined transfer
+
+```
+POST /api/transfers/{uuid}/deny
+```
+
+Marks the transfer as `failed` without moving any funds. Requires a `reason`.
+
+```bash
+curl -X POST http://localhost:8000/api/transfers/0196b1a4-.../deny \
+  -H "X-Api-Key: super_secure_api_key" \
+  -H "Content-Type: application/json" \
+  -d '{"reason": "suspicious activity"}'
+```
+
+```json
+{
+  "uuid": "0196b1a4-...",
+  "status": "failed",
+  "sourceAccountUuid": "0196b1a2-...",
+  "destinationAccountUuid": "0196b1a3-...",
+  "amount": 100000,
+  "currency": "EUR",
+  "formatted_amount": "EUR 1000.00",
+  "reference": null,
+  "createdAt": "2026-06-28T10:01:00+00:00",
+  "completedAt": null
+}
+```
+
 ### Error responses
 
 All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) (`application/problem+json`):
@@ -203,6 +263,8 @@ All errors follow [RFC 7807](https://datatracker.ietf.org/doc/html/rfc7807) (`ap
 | Duplicate idempotency key (in-flight) | 409 | `transfer-conflict`                |
 | Idempotency key reused with different payload | 409 | `request-hash-mismatch`            |
 | Transfer already processed | 409 | `already-processed`                |
+| Transfer is not under quarantine review | 409 | `transfer-not-quarantined`         |
+| Quarantine already approved or denied | 409 | `quarantine-already-reviewed`      |
 
 ---
 
@@ -277,6 +339,8 @@ composer cs-fix
 - **Multi-currency transfers** — only EUR is supported at this time. To support additional currencies, `Currency::SUPPORTED_CURRENCIES` would be extended and cross-currency transfers would require FX conversion: a scheduled console command would poll an external rate provider and persist the latest rates into an `exchange_rates` table. The `TransactionRunner` would look up the applicable rate at execution time, convert the debit amount, and record both the original and converted amounts in the ledger rows so the rate used is permanently auditable.
 
 - **Transfer fees** — no fee is deducted from transfers. A production system would define a fee structure (flat, percentage, or tiered) and apply it during the transaction: the fee amount would be debited from the source account alongside the principal, credited to a designated fee account, and recorded as its own ledger entries so fee revenue is fully auditable.
+
+- **TXM logic** — `TransactionMonitorInterface` is currently a stub that always returns `true` (no transfer is ever flagged). A real implementation would call a fraud/risk scoring service and apply rules (velocity checks, account age, amount thresholds, etc.) to decide whether to quarantine.
 
 - **Transfer reversal** - no mechanism to reverse or refund a completed transfer.
 
