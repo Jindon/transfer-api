@@ -27,6 +27,8 @@ services:
     App\Transfer\Domain\Repository\TransferRepositoryInterface: '@App\Transfer\Infrastructure\Persistence\Doctrine\DoctrineTransferRepository'
     App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface: '@App\Idempotency\Infrastructure\Persistence\Doctrine\DoctrineIdempotencyRequestRepository'
     App\Ledger\Domain\Repository\LedgerEntryRepositoryInterface: '@App\Ledger\Infrastructure\Persistence\Doctrine\DoctrineLedgerEntryRepository'
+    App\Txm\Domain\Repository\QuarantinedTransferRepositoryInterface: '@App\Txm\Infrastructure\Persistence\Doctrine\DoctrineQuarantinedTransferRepository'
+    App\Txm\Domain\Service\TransactionMonitorInterface: '@App\Txm\Infrastructure\Service\StubTransactionMonitor'
 
     # Api Key Binding
     App\Security\ApiKeyAuthenticator:

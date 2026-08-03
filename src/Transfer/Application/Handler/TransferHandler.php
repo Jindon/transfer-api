@@ -9,17 +9,17 @@ use App\Account\Domain\Exception\AccountNotFoundException;
 use App\Account\Domain\Repository\AccountRepositoryInterface;
 use App\Idempotency\Domain\Exception\RequestHashMismatchException;
 use App\Idempotency\Domain\Repository\IdempotencyRequestRepositoryInterface;
-use App\Ledger\Domain\Repository\LedgerEntryRepositoryInterface;
-use App\Shared\Money\Money;
 use App\Transfer\Application\Command\TransferCommand;
+use App\Transfer\Application\Service\MoneyMover;
 use App\Transfer\Domain\Event\TransferCompleted;
 use App\Transfer\Domain\Event\TransferCreated;
 use App\Transfer\Domain\Event\TransferFailed;
-use App\Transfer\Domain\Exception\TransferAlreadyProcessedException;
 use App\Transfer\Domain\Exception\TransferConflictException;
 use App\Transfer\Domain\Repository\TransferRepositoryInterface;
 use App\Transfer\Domain\Transfer;
 use App\Transfer\Infrastructure\Persistence\TransactionRunner;
+use App\Txm\Domain\Repository\QuarantinedTransferRepositoryInterface;
+use App\Txm\Domain\Service\TransactionMonitorInterface;
 use DateTimeImmutable;
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use Psr\Cache\CacheItemPoolInterface;
@@ -37,7 +37,9 @@ readonly class TransferHandler
         private TransactionRunner $transferProcessor,
         private TransferRepositoryInterface $transferRepository,
         private IdempotencyRequestRepositoryInterface $idempotencyRequestRepository,
-        private LedgerEntryRepositoryInterface $ledgerEntryRepository,
+        private MoneyMover $moneyMover,
+        private TransactionMonitorInterface $transactionMonitor,
+        private QuarantinedTransferRepositoryInterface $quarantinedTransferRepository,
         private CacheItemPoolInterface $replayCache,
         private LoggerInterface $logger,
         private MessageBusInterface $messageBus,
@@ -78,46 +80,14 @@ readonly class TransferHandler
 
         $this->messageBus->dispatch(new TransferCreated($transferId));
 
+        if (!$this->transactionMonitor->check($pendingTransfer)) {
+            $this->quarantinedTransferRepository->quarantine($pendingTransfer);
+
+            return $pendingTransfer;
+        }
+
         try {
-            $transfer = $this->transferProcessor->run(function () use ($transferId) {
-                $transfer = $this->transferRepository->findById($transferId);
-
-                if (!$transfer->isPending()) {
-                    throw new TransferAlreadyProcessedException();
-                }
-
-                $sourceAccountId = $transfer->getSourceAccount()->getId();
-                $destinationAccountId = $transfer->getDestinationAccount()->getId();
-
-                $accounts = $this->accountRepository->getOrderedLockForUpdate([$sourceAccountId, $destinationAccountId]);
-
-                /** @var Account $sourceAccount */
-                $sourceAccount = $accounts[$sourceAccountId];
-                /** @var Account $destinationAccount */
-                $destinationAccount = $accounts[$destinationAccountId];
-
-                $sourceAccount->debit($transfer->getAmount());
-                $destinationAccount->credit($transfer->getAmount());
-
-                $this->ledgerEntryRepository->recordDoubleEntry(
-                    transfer: $transfer,
-                    source: $sourceAccount,
-                    destination: $destinationAccount,
-                    amount: Money::make($transfer->getAmount(), $transfer->getCurrency()),
-                );
-
-                /*
-                 * If fees are involved, we can handle it here as well
-                 * debit fees from source -> credit to fee account
-                 */
-
-                $transfer->complete(new DateTimeImmutable());
-
-                $this->accountRepository->save($sourceAccount);
-                $this->accountRepository->save($destinationAccount);
-
-                return $transfer;
-            });
+            $transfer = $this->transferProcessor->run(fn () => $this->moneyMover->execute($transferId));
 
             $this->toReplayCache($command->idempotencyKey, $command->requestHash, $transfer);
             $this->messageBus->dispatch(new TransferCompleted($transfer->getId()));
